@@ -89,11 +89,7 @@ contract AKTest{
         if (msg.sender != _owner)
             revert();
         
-        if (_token != ERC20(0x0)) //check this
-        {    
-            uint256 allTokens = _token.balanceOf(address(this));
-            _token.transfer(_owner, allTokens);
-        }
+        safeTokenTransferAll(_owner);
         
         selfdestruct(_owner);
     } 
@@ -124,11 +120,7 @@ contract AKTest{
         _addressArray.length = 0;
         
         //remove any tokens
-        if (_token != ERC20(0x0)) //check this
-        {
-            uint256 allTokens = _token.balanceOf(address(this));
-            _token.transfer(_owner, allTokens);
-        }
+        safeTokenTransferAll(_owner);
         
         //send any balance back to owner
         if (this.balance > 0)
@@ -138,19 +130,18 @@ contract AKTest{
     }
     
     
-    function buyTokens()
+    function buyTokens() returns(uint)
     {
         //prerequisites. Return instead of throwing in order to save gas
         
-        if (_saleStartTime > 0 && now < _saleStartTime) return; //must have a sale start time defined and in the past
+        if (_saleStartTime == 0 || now < _saleStartTime) return 1; //must have a sale start time defined, and in the past
         
-        if (_sale == 0x0) return; //must have a sale address
+        if (_sale == 0x0) return 2; //must have a sale address
         
-        if (_tokensReceived) return; //only retieve tokens once
+        if (_tokensReceived) return 3; //only retieve tokens once
         
-        if (_maxGwei > 0 && msg.gas > (_maxGwei*1000000000)) return; //if we set a max gwei, then obey it
+        if (_maxGwei > 0 && msg.gas > (_maxGwei*1000000000)) return 4; //if we set a max gwei, then obey it
         
-
         //in the future we may split into multiple purchases
         //LockDeposits(); 
         _depositsLocked = true;
@@ -172,6 +163,7 @@ contract AKTest{
         //sale.proxyBuy(_owner);
         
         setTokensReceived();
+        return 0;
     }
     
     
@@ -215,6 +207,24 @@ contract AKTest{
         _totalEthUnspent = this.balance;
     }
     
+    function safeTokenTransfer(address target, uint256 value) internal returns(bool)
+    {
+        if (_token != ERC20(0x0))
+        {
+            return _token.transfer(target,value);
+        }
+        return true;
+    }
+    
+    function safeTokenTransferAll(address target) internal
+    {
+        if (_token != ERC20(0x0))
+        {
+            uint256 allTokens = _token.balanceOf(address(this));
+            _token.transfer(target, allTokens);
+        }
+    }
+    
     function withdrawFunds() internal
     {
         //return share of eth, if there is any left
@@ -226,7 +236,7 @@ contract AKTest{
         
         _etherDeposits[msg.sender] = 0;
         
-        //this simplifies to ethContributed if 100% of eth was used
+        //this simplifies to ethContributed if no eth was used, and nothing if it was all spent
         uint256 refund = (ethContributed*_totalEthUnspent)/_totalEthContributed;
         
         assert(refund <= this.balance);
@@ -241,8 +251,9 @@ contract AKTest{
         {
             uint256 userTokens = (ethContributed*_totalTokenBalance)/_totalEthContributed;
             
-            assert(userTokens < _totalTokenBalance);
-            require(_token.transfer(msg.sender, userTokens));
+            assert(userTokens <= _totalTokenBalance);
+            
+            require(safeTokenTransfer(msg.sender, userTokens));
         }
         else //sale not done, so adjust totals
         {
