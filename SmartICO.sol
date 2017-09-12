@@ -73,7 +73,7 @@ contract AKTest{
         if (msg.sender != _owner)
             revert();
         
-        _maxEth = maxEth;
+        _maxEth = maxEth * 1 ether;
     } 
     
     function setPurchaseFailed() {
