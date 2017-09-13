@@ -12,7 +12,7 @@ contract CrowdSaleInterface
 }
 
 //some sort of smart contract to hold & return eths
-contract AKTest{
+contract AKKyberBuyer{
     address public _owner;
  
     mapping (address => uint256) public _etherDeposits;
@@ -32,7 +32,7 @@ contract AKTest{
     uint256 public _totalEthUnspent;
     uint256 public _totalTokenBalance;
     
-    function AKTest()
+    function AKKyberBuyer()
     {
         _owner= msg.sender;  
     }
@@ -69,14 +69,14 @@ contract AKTest{
         _maxGwei = maxGwei;
     }
     
-    function setMaxEth(uint256 maxEth) {
+    function setMaxEthInFinney(uint256 maxEth) {
         if (msg.sender != _owner)
             revert();
         
-        _maxEth = maxEth * 1 ether;
+        _maxEth = maxEth * 1 finney;
     } 
     
-    function setPurchaseFailed() {
+    function setPurchaseEnded() {
         if (msg.sender != _owner)
             revert();
         
@@ -158,11 +158,14 @@ contract AKTest{
         }
         
         //use call to forward gas
-        require(_sale.call.value(ethToSpend)());
-        //CrowdSaleInterface sale = CrowdSaleInterface(_sale);
-        //sale.proxyBuy(_owner);
         
-        setTokensReceived();
+        //require(_sale.call.value(ethToSpend)());
+        //setTokensReceived();
+        
+        bytes32 proxy = 0x123;
+        CrowdSaleInterface sale = CrowdSaleInterface(_sale);
+        sale.proxyBuy.value(ethToSpend)(proxy, _owner);
+        
         return 0;
     }
     
