@@ -84,16 +84,6 @@ contract AKKyberBuyer{
     } 
     
     
-    //for emergencies - kill contract and send ether back to owner. Will attempt to return any tokens of correct type
-    function emergencySelfDestruct() {
-        if (msg.sender != _owner)
-            revert();
-        
-        safeTokenTransferAll(_owner);
-        
-        selfdestruct(_owner);
-    } 
-    
     //resets everything except the sale address and token
     function resetMe() {
         if (msg.sender != _owner)
@@ -143,11 +133,11 @@ contract AKKyberBuyer{
         if (_maxGwei > 0 && msg.gas > (_maxGwei*1000000000)) return 4; //if we set a max gwei, then obey it
         
         //in the future we may split into multiple purchases
-        //LockDeposits(); 
         _depositsLocked = true;
         
         uint256 ethToSpend;
         
+        //there may be a purchase limit set
         if (_maxEth > 0 && _totalEthUnspent > _maxEth)
         {
             ethToSpend = _maxEth;
@@ -168,15 +158,6 @@ contract AKKyberBuyer{
         
         return 0;
     }
-    
-    
-    //function LockDeposits() internal
-    //{
-        //require(msg.sender == _owner);
-        //_depositsLocked = true;
-        //_totalEthContributed = this.balance;
-        //_totalEthUnspent = this.balance;
-    //}
     
     
     //final system will lock in these values when either:

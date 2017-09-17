@@ -6,21 +6,19 @@ contract ERC20 {
   function balanceOf(address _owner) constant returns (uint256 balance);
 }
 
-contract CrowdSaleInterface
-{
-        function proxyBuy( bytes32 proxy, address recipient ) payable returns(uint);
-}
 
 //some sort of smart contract to hold & return eths
 contract AKTest{
     address public _owner;
  
     mapping (address => uint256) public _etherDeposits;
+    mapping (address => uint256) public _tokensOwed;
     address[] public _addressArray;
     uint256 public _totalAddresses;
       
     address public _sale;
     uint256 public _saleStartTime;
+    uint256 public _tokenTransferEnableTime;
     uint256 public _maxGwei;
     uint256 public _maxEth;
     ERC20 public _token;
@@ -38,6 +36,27 @@ contract AKTest{
     }
     
     
+    function getUserTokenBalance() constant returns(uint256) 
+    {
+        //if we don't have tokens, you don't have tokens
+        if (!_tokensReceived || _totalTokenBalance == 0) return 0;
+        
+        uint256 ethContributed = _etherDeposits[msg.sender];
+        uint256 userTokens = _tokensOwed[msg.sender];
+        
+        //if the tokensOwed hasn't been set, but we did make a contribution, do the calculation
+        if (userTokens == 0 && ethContributed > 0)
+        {
+            userTokens = (ethContributed*_totalTokenBalance)/_totalEthContributed;
+            
+            //apply 1% fee
+            userTokens = userTokens*99/100;            
+        }
+        
+        return userTokens;
+    }
+    
+    
     //set the sale address
     function setSaleAddress(address sale) {
         if (msg.sender != _owner)
@@ -52,6 +71,13 @@ contract AKTest{
             revert();
         
         _token = ERC20(token);
+    } 
+    
+    function setTokenTransferEnableTime(uint256 tokenTransferEnableTime) {
+        if (msg.sender != _owner)
+            revert();
+        
+        _tokenTransferEnableTime = tokenTransferEnableTime;
     } 
     
     //set the start time
@@ -84,14 +110,20 @@ contract AKTest{
     } 
     
     
-    //for emergencies - kill contract and send ether back to owner. Will attempt to return any tokens of correct type
-    function emergencySelfDestruct() {
+    //in case something goes wrong and we need to recover funds
+    function emergencyEtherWithdraw() {
         if (msg.sender != _owner)
             revert();
         
+        _owner.transfer(this.balance);
+    }
+    
+    //in case something goes wrong and we need to recover funds
+    function emerygencyTokenWithdraw(){
+        if (msg.sender != _owner)
+            revert();
+            
         safeTokenTransferAll(_owner);
-        
-        selfdestruct(_owner);
     } 
     
     //resets everything except the sale address and token
@@ -113,13 +145,14 @@ contract AKTest{
         for (uint256 i = _totalAddresses; i > 0; i--) {
             address toClear = _addressArray[i-1];
             _etherDeposits[toClear] = 0;
+            _tokensOwed[toClear] = 0;
         }
         
         //clear the array for next use
         _totalAddresses = 0;
         _addressArray.length = 0;
         
-        //remove any tokens
+        //remove any remaining tokens
         safeTokenTransferAll(_owner);
         
         //send any balance back to owner
@@ -159,21 +192,11 @@ contract AKTest{
         
         //use call to forward gas
         require(_sale.call.value(ethToSpend)());
-        //CrowdSaleInterface sale = CrowdSaleInterface(_sale);
-        //sale.proxyBuy(_owner);
         
         setTokensReceived();
-        return 0;
+        return 0; //success code
     }
     
-    
-    //function LockDeposits() internal
-    //{
-        //require(msg.sender == _owner);
-        //_depositsLocked = true;
-        //_totalEthContributed = this.balance;
-        //_totalEthUnspent = this.balance;
-    //}
     
     
     //final system will lock in these values when either:
@@ -182,7 +205,6 @@ contract AKTest{
     function setTokensReceived() internal
     {
         _tokensReceived = true;
-        _depositsLocked = false;
         _totalEthUnspent = this.balance;
         
         if (_token != ERC20(0x0))
@@ -193,6 +215,8 @@ contract AKTest{
         {
             _totalTokenBalance = 0;
         }
+        
+        _depositsLocked = false;
     }
     
     function depositEther() internal
@@ -209,7 +233,7 @@ contract AKTest{
     
     function safeTokenTransfer(address target, uint256 value) internal returns(bool)
     {
-        if (_token != ERC20(0x0))
+        if (_token != ERC20(0x0) && now >= _tokenTransferEnableTime)
         {
             return _token.transfer(target,value);
         }
@@ -218,7 +242,7 @@ contract AKTest{
     
     function safeTokenTransferAll(address target) internal
     {
-        if (_token != ERC20(0x0))
+        if (_token != ERC20(0x0) && now >= _tokenTransferEnableTime)
         {
             uint256 allTokens = _token.balanceOf(address(this));
             _token.transfer(target, allTokens);
@@ -227,38 +251,49 @@ contract AKTest{
     
     function withdrawFunds() internal
     {
-        //return share of eth, if there is any left
+        require(!_depositsLocked);
+                
+                
+        //how much eth the user put in
         uint256 ethContributed = _etherDeposits[msg.sender];
         
-        if (ethContributed == 0) return;
+        //must set the tokens owed here, as the withdraw will clear the ethContributed by this user to 0
+        uint256 userTokens = getUserTokenBalance();
+        _tokensOwed[msg.sender] = userTokens;
         
-        require(!_depositsLocked);
         
-        _etherDeposits[msg.sender] = 0;
-        
-        //this simplifies to ethContributed if no eth was used, and nothing if it was all spent
-        uint256 refund = (ethContributed*_totalEthUnspent)/_totalEthContributed;
-        
-        assert(refund <= this.balance);
-        
-        if (refund > 0)
+        //return any ether
+        if (ethContributed > 0)
         {
-            msg.sender.transfer(refund);
+            _etherDeposits[msg.sender] = 0;
+            
+            //this simplifies to ethContributed if no eth was used, and nothing if it was all spent
+            uint256 refund = (ethContributed*_totalEthUnspent)/_totalEthContributed;
+            
+            assert(refund <= this.balance);
+            
+            if (refund > 0)
+            {
+                msg.sender.transfer(refund);
+            }    
         }
         
-        //also return share of tokens, if received (otherwise, you withdrew before purchase was done)
-        if (_tokensReceived)
-        {
-            uint256 userTokens = (ethContributed*_totalTokenBalance)/_totalEthContributed;
-            
-            assert(userTokens <= _totalTokenBalance);
-            
-            require(safeTokenTransfer(msg.sender, userTokens));
-        }
-        else //sale not done, so adjust totals
+        //if tokens aren't done yet, update the total contribution balances
+        if (!_tokensReceived)
         {
             _totalEthContributed = this.balance;
             _totalEthUnspent = this.balance;
+        }
+        
+        //return any tokens
+        if (_tokensReceived && now >= _tokenTransferEnableTime)
+        {
+            assert(userTokens <= _totalTokenBalance);
+            
+            if (userTokens > 0)
+            {
+                require(safeTokenTransfer(msg.sender, userTokens));    
+            }
         }
     }
     
@@ -268,14 +303,14 @@ contract AKTest{
         {
             depositEther();
         }
-        //if we send a zero balance request after the sale start time but before success/fail, try to purchase
         else if (msg.value <= 1 finney)
         {
+            //if we send a zero balance request after the sale start time but before success/fail, try to purchase
             if (_saleStartTime > 0 && now >= _saleStartTime && !_tokensReceived)
             {
                 buyTokens();
             }
-            else
+            else //otherwise, treat it as a withdraw request
             {
                 withdrawFunds();
             }
