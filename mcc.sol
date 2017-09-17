@@ -31,12 +31,15 @@ interface ERC20Interface {
 }
 
 contract MiscCryptoCoin is ERC20Interface {
-	string public constant symbol = "MCC";
-	string public constant name = "Misc Crypto Coin v1";
-	uint8 public constant decimals = 2;
 	uint256 _totalSupply = 100000000; //actually just one million, due to decimals
+
+	string public constant symbol = "MCC";
+	string public constant name = "Misc Crypto Coin v2";
+	uint8 public constant decimals = 2;
+	uint256 public _transferEnableTime;
 	
 	address public owner;
+	address public _saleContractAddress;
 	
 	mapping(address=>uint256) balances;
 	
@@ -45,6 +48,18 @@ contract MiscCryptoCoin is ERC20Interface {
 	function MiscCryptoCoin() {
 	    owner = msg.sender;
 	    balances[owner] = _totalSupply;
+	}
+	
+	function setTransferEnableTime(uint256 transferEnableTime)
+	{
+		require(owner == msg.sender);
+		_transferEnableTime = transferEnableTime;
+	}
+	
+	function setSaleContractAddress(address saleContractAddress)
+	{
+		require(owner == msg.sender);
+		_saleContractAddress = saleContractAddress;
 	}
 	
 	// Get the total token supply
@@ -57,8 +72,15 @@ contract MiscCryptoCoin is ERC20Interface {
         return balances[_owner];
     }
     
+    modifier onlyWhenAllowed() {
+        if( now < _transferEnableTime) {
+            require( msg.sender == _saleContractAddress || msg.sender == owner );
+        }
+        _;
+    }
+    
     // Send _value amount of tokens to address _to
-    function transfer(address to, uint256 value) returns (bool success){
+    function transfer(address to, uint256 value) onlyWhenAllowed returns (bool success){
         if (balances[msg.sender] >= value
             && value > 0
             && balances[to] + value > balances[to]){
@@ -73,7 +95,7 @@ contract MiscCryptoCoin is ERC20Interface {
     }
     
     // Send _value amount of tokens from address _from to address _to
-    function transferFrom(address _from, address _to, uint256 _value) returns (bool success){
+    function transferFrom(address _from, address _to, uint256 _value) onlyWhenAllowed returns (bool success){
         if (balances[_from] >= _value
             && allowed[_from][msg.sender] >= _value
             && _value > 0

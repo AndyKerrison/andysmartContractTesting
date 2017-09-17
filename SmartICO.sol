@@ -8,7 +8,7 @@ contract ERC20 {
 
 
 //some sort of smart contract to hold & return eths
-contract AKTest{
+contract AKBuy{
     address public _owner;
  
     mapping (address => uint256) public _etherDeposits;
@@ -30,19 +30,19 @@ contract AKTest{
     uint256 public _totalEthUnspent;
     uint256 public _totalTokenBalance;
     
-    function AKTest()
+    function AKBuy()
     {
         _owner= msg.sender;  
     }
     
     
-    function getUserTokenBalance() constant returns(uint256) 
+    function getUserTokenBalance(address userAddress) constant returns(uint256) 
     {
         //if we don't have tokens, you don't have tokens
         if (!_tokensReceived || _totalTokenBalance == 0) return 0;
         
-        uint256 ethContributed = _etherDeposits[msg.sender];
-        uint256 userTokens = _tokensOwed[msg.sender];
+        uint256 ethContributed = _etherDeposits[userAddress];
+        uint256 userTokens = _tokensOwed[userAddress];
         
         //if the tokensOwed hasn't been set, but we did make a contribution, do the calculation
         if (userTokens == 0 && ethContributed > 0)
@@ -258,7 +258,7 @@ contract AKTest{
         uint256 ethContributed = _etherDeposits[msg.sender];
         
         //must set the tokens owed here, as the withdraw will clear the ethContributed by this user to 0
-        uint256 userTokens = getUserTokenBalance();
+        uint256 userTokens = getUserTokenBalance(msg.sender);
         _tokensOwed[msg.sender] = userTokens;
         
         
@@ -292,6 +292,7 @@ contract AKTest{
             
             if (userTokens > 0)
             {
+				_tokensOwed[msg.sender] = 0;
                 require(safeTokenTransfer(msg.sender, userTokens));    
             }
         }
