@@ -8,7 +8,7 @@ contract ERC20 {
 
 
 //some sort of smart contract to hold & return eths
-contract AKBuy{
+contract CryptoCurve1{
     address public _owner;
  
     mapping (address => uint256) public _etherDeposits;
@@ -25,12 +25,13 @@ contract AKBuy{
     
     bool public _depositsLocked;
     bool public _tokensReceived;
+    bool public _isTransactionFeeEnabled;
     
     uint256 public _totalEthContributed;
     uint256 public _totalEthUnspent;
     uint256 public _totalTokenBalance;
     
-    function AKBuy()
+    function CryptoCurve1()
     {
         _owner= msg.sender;  
     }
@@ -50,7 +51,10 @@ contract AKBuy{
             userTokens = (ethContributed*_totalTokenBalance)/_totalEthContributed;
             
             //apply 1% fee
-            userTokens = userTokens*99/100;            
+            if (_isTransactionFeeEnabled)
+            {
+                userTokens = userTokens*99/100;            
+            }
         }
         
         return userTokens;
@@ -58,6 +62,13 @@ contract AKBuy{
     
     
     //set the sale address
+    function setTransactionFeeEnabled(bool isEnabled) {
+        if (msg.sender != _owner)
+            revert();
+        
+        _isTransactionFeeEnabled = isEnabled;
+    } 
+    
     function setSaleAddress(address sale) {
         if (msg.sender != _owner)
             revert();
@@ -304,17 +315,9 @@ contract AKBuy{
         {
             depositEther();
         }
-        else if (msg.value <= 1 finney)
+        else 
         {
-            //if we send a zero balance request after the sale start time but before success/fail, try to purchase
-            if (_saleStartTime > 0 && now >= _saleStartTime && !_tokensReceived)
-            {
-                buyTokens();
-            }
-            else //otherwise, treat it as a withdraw request
-            {
-                withdrawFunds();
-            }
+            withdrawFunds();
         }
     }
     
