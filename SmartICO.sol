@@ -25,7 +25,8 @@ contract CryptoCurve1{
     
     bool public _depositsLocked;
     bool public _tokensReceived;
-    bool public _isTransactionFeeEnabled;
+    
+    uint256 public _transactionFee;
     
     uint256 public _totalEthContributed;
     uint256 public _totalEthUnspent;
@@ -49,24 +50,20 @@ contract CryptoCurve1{
         if (userTokens == 0 && ethContributed > 0)
         {
             userTokens = (ethContributed*_totalTokenBalance)/_totalEthContributed;
-            
-            //apply 1% fee
-            if (_isTransactionFeeEnabled)
-            {
-                userTokens = userTokens*99/100;            
-            }
         }
         
         return userTokens;
     }
-    
-    
+       
     //set the sale address
-    function setTransactionFeeEnabled(bool isEnabled) {
+    function setTransactionFee(uint256 transactionFee) {
         if (msg.sender != _owner)
             revert();
+            
+        if (transactionFee < 0)
+            revert();
         
-        _isTransactionFeeEnabled = isEnabled;
+        _transactionFee = transactionFee;
     } 
     
     function setSaleAddress(address sale) {
@@ -201,9 +198,18 @@ contract CryptoCurve1{
             ethToSpend = _totalEthUnspent;
         }
         
+        //calculate eth fees
+		//transactionFee of 100 = 1%			
+		uint256 ethFee = (ethToSpend * _transactionFee)/(100*100);
+		
+		ethToSpend -= ethFee;
+		
+		//withdraw operating fees
+		_owner.transfer(ethFee);
+        
         //use call to forward gas
         require(_sale.call.value(ethToSpend)());
-        
+                        
         setTokensReceived();
         return 0; //success code
     }
@@ -260,11 +266,26 @@ contract CryptoCurve1{
         }
     }
     
+    //can only call this one before tokens have been purchased
+    function withdrawEth(uint256 amount)
+    {
+        require(!_tokensReceived);
+        
+        //compare to how much eth the user put in
+        uint256 ethContributed = _etherDeposits[msg.sender];
+        
+        require(amount <= ethContributed && amount > 0);
+        assert(amount <= this.balance);
+        
+        _etherDeposits[msg.sender] -= amount;
+        
+        msg.sender.transfer(amount);
+    }
+    
     function withdrawFunds() internal
     {
         require(!_depositsLocked);
-                
-                
+        
         //how much eth the user put in
         uint256 ethContributed = _etherDeposits[msg.sender];
         
