@@ -34,7 +34,7 @@ contract MiscCryptoCoin is ERC20Interface {
 	uint256 _totalSupply = 100000000; //actually just one million, due to decimals
 
 	string public constant symbol = "MCC";
-	string public constant name = "Misc Crypto Coin v2";
+	string public constant name = "Misc Crypto Coin v3";
 	uint8 public constant decimals = 2;
 	uint256 public _transferEnableTime;
 	
